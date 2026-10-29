@@ -1,0 +1,16 @@
+# 构建产物与依赖
+backend/target/
+backend/uploads/
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# 系统与日志
+*.log
+*.tmp
+.DS_Store
+Thumbs.db

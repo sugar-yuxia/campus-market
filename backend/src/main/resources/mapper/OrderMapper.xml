@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.campus.market.mapper.OrderMapper">
+
+    <sql id="orderColumns">
+        o.id, o.order_no, o.product_id, o.amount, o.status, o.remark,
+        o.buyer_id, o.seller_id, o.created_at, o.paid_at, o.finished_at,
+        oi.product_title, oi.product_cover,
+        bu.nickname AS buyer_nickname, su.nickname AS seller_nickname
+    </sql>
+
+    <insert id="insert" parameterType="com.campus.market.entity.Order"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO orders (order_no, product_id, buyer_id, seller_id, amount, status, remark)
+        VALUES (#{orderNo}, #{productId}, #{buyerId}, #{sellerId}, #{amount}, #{status}, #{remark})
+    </insert>
+
+    <select id="findById" resultType="com.campus.market.entity.Order">
+        SELECT id, order_no, product_id, buyer_id, seller_id, amount, status, remark,
+               created_at, paid_at, finished_at
+        FROM orders
+        WHERE id = #{id}
+    </select>
+
+    <select id="findDetailById" resultType="com.campus.market.vo.OrderVO">
+        SELECT
+        <include refid="orderColumns"/>
+        FROM orders o
+        JOIN order_items oi ON oi.order_id = o.id
+        JOIN users bu ON bu.id = o.buyer_id
+        JOIN users su ON su.id = o.seller_id
+        WHERE o.id = #{id}
+    </select>
+
+    <select id="selectBoughtPage" resultType="com.campus.market.vo.OrderVO">
+        SELECT
+        <include refid="orderColumns"/>
+        FROM orders o
+        JOIN order_items oi ON oi.order_id = o.id
+        JOIN users bu ON bu.id = o.buyer_id
+        JOIN users su ON su.id = o.seller_id
+        WHERE o.buyer_id = #{buyerId}
+        <if test="status != null and status != ''">
+            AND o.status = #{status}
+        </if>
+        ORDER BY o.created_at DESC, o.id DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countBought" resultType="long">
+        SELECT COUNT(*)
+        FROM orders o
+        WHERE o.buyer_id = #{buyerId}
+        <if test="status != null and status != ''">
+            AND o.status = #{status}
+        </if>
+    </select>
+
+    <select id="selectSoldPage" resultType="com.campus.market.vo.OrderVO">
+        SELECT
+        <include refid="orderColumns"/>
+        FROM orders o
+        JOIN order_items oi ON oi.order_id = o.id
+        JOIN users bu ON bu.id = o.buyer_id
+        JOIN users su ON su.id = o.seller_id
+        WHERE o.seller_id = #{sellerId}
+        <if test="status != null and status != ''">
+            AND o.status = #{status}
+        </if>
+        ORDER BY o.created_at DESC, o.id DESC
+        LIMIT #{size} OFFSET #{offset}
+    </select>
+
+    <select id="countSold" resultType="long">
+        SELECT COUNT(*)
+        FROM orders o
+        WHERE o.seller_id = #{sellerId}
+        <if test="status != null and status != ''">
+            AND o.status = #{status}
+        </if>
+    </select>
+
+    <update id="pay">
+        UPDATE orders
+        SET status = 'PAID', paid_at = CURRENT_TIMESTAMP
+        WHERE id = #{id} AND buyer_id = #{buyerId} AND status = 'PENDING_PAY'
+    </update>
+
+    <update id="confirm">
+        UPDATE orders
+        SET status = 'COMPLETED', finished_at = CURRENT_TIMESTAMP
+        WHERE id = #{id} AND buyer_id = #{buyerId} AND status = 'PAID'
+    </update>
+
+    <update id="cancel">
+        UPDATE orders
+        SET status = 'CANCELLED'
+        WHERE id = #{id}
+          AND status = 'PENDING_PAY'
+          AND (buyer_id = #{userId} OR seller_id = #{userId})
+    </update>
+</mapper>

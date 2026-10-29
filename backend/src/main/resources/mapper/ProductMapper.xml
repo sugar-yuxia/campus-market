@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.campus.market.mapper.ProductMapper">
+
+    <sql id="listColumns">
+        p.id, p.title, p.description, p.price, p.original_price, p.category_id,
+        p.seller_id, p.cover, p.condition_level, p.status, p.view_count,
+        p.created_at, p.updated_at,
+        c.name AS category_name, u.nickname AS seller_nickname, u.avatar AS seller_avatar
+    </sql>
+
+    <sql id="listCondition">
+        <where>
+            <choose>
+                <when test="q.sellerId != null">
+                    p.seller_id = #{q.sellerId}
+                    <if test="q.status != null and q.status != ''">
+                        AND p.status = #{q.status}
+                    </if>
+                </when>
+                <otherwise>
+                    p.status = 'ON_SALE'
+                </otherwise>
+            </choose>
+            <if test="q.categoryId != null">
+                AND p.category_id = #{q.categoryId}
+            </if>
+            <if test="q.keyword != null and q.keyword != ''">
+                AND (p.title LIKE CONCAT('%', #{q.keyword}, '%')
+                  OR p.description LIKE CONCAT('%', #{q.keyword}, '%'))
+            </if>
+        </where>
+    </sql>
+
+    <select id="selectPage" resultType="com.campus.market.vo.ProductVO">
+        SELECT
+        <include refid="listColumns"/>
+        FROM products p
+        LEFT JOIN categories c ON c.id = p.category_id
+        LEFT JOIN users u ON u.id = p.seller_id
+        <include refid="listCondition"/>
+        <choose>
+            <when test="q.sort == 'priceAsc'">ORDER BY p.price ASC, p.id DESC</when>
+            <when test="q.sort == 'priceDesc'">ORDER BY p.price DESC, p.id DESC</when>
+            <when test="q.sort == 'hot'">ORDER BY p.view_count DESC, p.id DESC</when>
+            <otherwise>ORDER BY p.created_at DESC, p.id DESC</otherwise>
+        </choose>
+        LIMIT #{q.size} OFFSET #{q.offset}
+    </select>
+
+    <select id="countPage" resultType="long">
+        SELECT COUNT(*)
+        FROM products p
+        <include refid="listCondition"/>
+    </select>
+
+    <select id="selectHot" resultType="com.campus.market.vo.ProductVO">
+        SELECT
+        <include refid="listColumns"/>
+        FROM products p
+        LEFT JOIN categories c ON c.id = p.category_id
+        LEFT JOIN users u ON u.id = p.seller_id
+        WHERE p.status = 'ON_SALE'
+        ORDER BY p.view_count DESC, p.id DESC
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectDetail" resultType="com.campus.market.vo.ProductVO">
+        SELECT
+        <include refid="listColumns"/>
+        FROM products p
+        LEFT JOIN categories c ON c.id = p.category_id
+        LEFT JOIN users u ON u.id = p.seller_id
+        WHERE p.id = #{id}
+    </select>
+
+    <insert id="insert" parameterType="com.campus.market.entity.Product"
+            useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO products (title, description, price, original_price, category_id,
+                              seller_id, cover, condition_level, status, view_count)
+        VALUES (#{title}, #{description}, #{price}, #{originalPrice}, #{categoryId},
+                #{sellerId}, #{cover}, #{conditionLevel}, #{status}, 0)
+    </insert>
+
+    <update id="update" parameterType="com.campus.market.entity.Product">
+        UPDATE products
+        SET title = #{title},
+            description = #{description},
+            price = #{price},
+            original_price = #{originalPrice},
+            category_id = #{categoryId},
+            cover = #{cover},
+            condition_level = #{conditionLevel},
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{id} AND seller_id = #{sellerId}
+    </update>
+
+    <update id="updateStatus">
+        UPDATE products
+        SET status = #{status}, updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+          AND seller_id = #{sellerId}
+          AND status IN ('ON_SALE', 'OFF_SHELF')
+    </update>
+
+    <delete id="delete">
+        DELETE FROM products
+        WHERE id = #{id}
+          AND seller_id = #{sellerId}
+          AND status IN ('ON_SALE', 'OFF_SHELF')
+    </delete>
+
+    <update id="incrementViewCount">
+        UPDATE products SET view_count = view_count + 1 WHERE id = #{id}
+    </update>
+
+    <update id="lockForSale">
+        UPDATE products
+        SET status = 'LOCKED', updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{id} AND status = 'ON_SALE'
+    </update>
+
+    <update id="transferStatus">
+        UPDATE products
+        SET status = #{to}, updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{id} AND status = #{from}
+    </update>
+</mapper>
