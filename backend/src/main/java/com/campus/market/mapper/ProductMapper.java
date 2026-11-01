@@ -17,6 +17,8 @@ public interface ProductMapper {
 
     ProductVO selectDetail(@Param("id") Long id);
 
+    List<ProductVO> selectViewCounts(@Param("ids") List<Long> ids);
+
     int insert(Product product);
 
     int update(Product product);

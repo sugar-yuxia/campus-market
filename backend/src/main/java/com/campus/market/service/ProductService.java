@@ -57,6 +57,7 @@ public class ProductService {
         }
         if (increaseView) {
             productMapper.incrementViewCount(id);
+            product.setViewCount(product.getViewCount() + 1);
         }
         product.setImages(productImageMapper.selectUrlsByProductId(id));
         return product;

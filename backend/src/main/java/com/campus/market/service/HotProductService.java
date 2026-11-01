@@ -14,6 +14,8 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 热门商品缓存：优先读 Redis，Redis 不可用时自动降级为直接查库，保证首页可用。
@@ -45,22 +47,47 @@ public class HotProductService {
     }
 
     public List<ProductVO> listHot() {
+        List<ProductVO> hot = null;
         try {
             String cached = redisTemplate.opsForValue().get(HOT_KEY);
             if (cached != null) {
-                return objectMapper.readValue(cached, LIST_TYPE);
+                hot = objectMapper.readValue(cached, LIST_TYPE);
             }
         } catch (Exception e) {
             log.warn("读取 Redis 热门商品缓存失败，降级查询数据库：{}", e.getMessage());
         }
 
-        List<ProductVO> hot = productMapper.selectHot(limit);
-        try {
-            redisTemplate.opsForValue().set(HOT_KEY, objectMapper.writeValueAsString(hot), ttl);
-        } catch (Exception e) {
-            log.warn("写入 Redis 热门商品缓存失败：{}", e.getMessage());
+        if (hot == null) {
+            hot = productMapper.selectHot(limit);
+            try {
+                redisTemplate.opsForValue().set(HOT_KEY, objectMapper.writeValueAsString(hot), ttl);
+            } catch (Exception e) {
+                log.warn("写入 Redis 热门商品缓存失败：{}", e.getMessage());
+            }
         }
+
+        refreshViewCounts(hot);
         return hot;
+    }
+
+    /**
+     * 浏览数高频变更，不值得为了一次浏览就失效整个缓存；
+     * 缓存负责"哪些商品上榜"（联表/排序的重查询），浏览数用点查实时补齐。
+     */
+    private void refreshViewCounts(List<ProductVO> hot) {
+        if (hot.isEmpty()) {
+            return;
+        }
+        Map<Long, Integer> latest = productMapper.selectViewCounts(
+                        hot.stream().map(ProductVO::getId).toList())
+                .stream()
+                .collect(Collectors.toMap(ProductVO::getId, ProductVO::getViewCount));
+        hot.forEach(p -> {
+            Integer v = latest.get(p.getId());
+            if (v != null) {
+                p.setViewCount(v);
+            }
+        });
     }
 
     /**
